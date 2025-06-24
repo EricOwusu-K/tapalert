@@ -5,54 +5,47 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 0, // Remove red background
-        automaticallyImplyLeading: false, // No back button
-        title: const Text(
-          'TapAlert',
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            color: Color.fromARGB(255, 141, 134, 134),
-            shadows: [
-              Shadow(
-                blurRadius: 4.0,
-                color: Color.fromARGB(255, 41, 37, 37),
-                offset: Offset(2.0, 2.0),
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: Center(
-        child: GestureDetector(
-          onTap: () {
-            // TODO: Replace with alert logic
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text("Tap detected!")));
-          },
-          child: Container(
-            width: 250,
-            height: 250,
-            decoration: BoxDecoration(
-              color: Colors.red.shade100.withOpacity(0.3),
-              border: Border.all(color: Colors.red, width: 2),
-              borderRadius: BorderRadius.circular(16),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top-left logo and app name
+            Row(
+              children: [
+                const Text(
+                  'TapAlert',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF736BFE),
+                  ),
+                ),
+                Image.asset('assets/logo.png', width: 40, height: 40),
+                const SizedBox(width: 8),
+              ],
             ),
-            child: const Center(
-              child: Text(
-                'Tap Here to Alert',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.red,
+            const SizedBox(height: 32),
+
+            // Gesture detection area (to be developed)
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: const Center(
+                  child: Text(
+                    'Tap here to trigger alert',
+                    style: TextStyle(color: Colors.black54),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
