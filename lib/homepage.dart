@@ -11,7 +11,6 @@ class HomePage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top-left logo and app name
             Row(
               children: [
                 const Text(
@@ -28,7 +27,6 @@ class HomePage extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
-            // Gesture detection area (to be developed)
             Expanded(
               child: Container(
                 width: double.infinity,

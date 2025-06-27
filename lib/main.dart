@@ -1,11 +1,17 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:tapalert/firebase_options.dart';
 import 'homepage.dart';
 import 'alertpage.dart';
 import 'contactpage.dart';
 import 'emergencypage.dart';
 import 'settingspage.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   runApp(const TapAlertApp());
 }
 
@@ -66,7 +72,7 @@ class _MainScreenState extends State<MainScreen> {
       body: _pages[_currentIndex],
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFFF2F3F8), // Frosted-style bottom bar
+          color: Color(0xFFF2F3F8),
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(24),
             topRight: Radius.circular(24),
