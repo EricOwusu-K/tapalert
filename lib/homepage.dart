@@ -1,7 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  Future<void> _triggerGesture(String gestureType) async {
+    try {
+      final querySnapshot =
+          await FirebaseFirestore.instance
+              .collection('gestureAlerts')
+              .where('gesture', isEqualTo: gestureType)
+              .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final alert = querySnapshot.docs.first.data();
+        final name = alert['alertName'] ?? 'Unnamed Alert';
+        final category = alert['category'] ?? 'No Category';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check, color: Colors.white), // or Colors.green
+                const SizedBox(width: 10),
+                Expanded(child: Text('🚨 $name ($category) alert triggered!')),
+              ],
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // TODO: Learn sending SMS when alert logic is triggered. Ask Questions first
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ No alert set for "$gestureType"'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.black),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,26 +67,38 @@ class HomePage extends StatelessWidget {
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF736BFE),
+                    shadows: [
+                      Shadow(
+                        color: Colors.black26,
+                        offset: Offset(1, 1),
+                        blurRadius: 3,
+                      ),
+                    ],
                   ),
                 ),
-                Image.asset('assets/logo.png', width: 40, height: 40),
                 const SizedBox(width: 8),
+                Image.asset('assets/logo.png', width: 40, height: 40),
               ],
             ),
             const SizedBox(height: 32),
 
             Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: const Center(
-                  child: Text(
-                    'Tap here to trigger alert',
-                    style: TextStyle(color: Colors.black54),
+              child: GestureDetector(
+                onTap: () => _triggerGesture("singleTap"),
+                onDoubleTap: () => _triggerGesture("doubleTap"),
+                onLongPress: () => _triggerGesture("longPress"),
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Tap here to trigger alert',
+                      style: TextStyle(color: Colors.black54),
+                    ),
                   ),
                 ),
               ),
