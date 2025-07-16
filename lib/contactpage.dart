@@ -98,6 +98,34 @@ class _EmergencyContactsPageState extends State<EmergencyContactsPage> {
     );
   }
 
+  Future<void> _confirmDelete(String docId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Delete Contact'),
+            content: const Text('Do you want to delete this contact?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Discard'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Confirm'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirm == true) {
+      await FirebaseFirestore.instance
+          .collection('contacts')
+          .doc(docId)
+          .delete();
+    }
+  }
+
   Widget _buildContactCard(Map<String, dynamic> contactData) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
@@ -124,12 +152,7 @@ class _EmergencyContactsPageState extends State<EmergencyContactsPage> {
               const Icon(Icons.star, color: Colors.blue),
             IconButton(
               icon: const Icon(Icons.delete),
-              onPressed: () {
-                FirebaseFirestore.instance
-                    .collection('contacts')
-                    .doc(contactData['id'])
-                    .delete();
-              },
+              onPressed: () => _confirmDelete(contactData['id']),
             ),
           ],
         ),
@@ -137,72 +160,99 @@ class _EmergencyContactsPageState extends State<EmergencyContactsPage> {
     );
   }
 
+  Widget _buildAddContactButton() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 16.0),
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.person_add),
+        label: const Text('Add Contact'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF736BFE),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        ),
+        onPressed: _addContactDialog,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Emergency Contacts'),
-        actions: [
-          IconButton(icon: const Icon(Icons.add), onPressed: _addContactDialog),
-        ],
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream:
-            FirebaseFirestore.instance
-                .collection('contacts')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return StreamBuilder<QuerySnapshot>(
+      stream:
+          FirebaseFirestore.instance
+              .collection('contacts')
+              .orderBy('createdAt', descending: true)
+              .snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        final allContacts =
+            docs
+                .map(
+                  (doc) => {
+                    'id': doc.id,
+                    ...doc.data() as Map<String, dynamic>,
+                  },
+                )
+                .toList();
 
-          final docs = snapshot.data!.docs;
-          final allContacts =
-              docs
-                  .map(
-                    (doc) => {
-                      'id': doc.id,
-                      ...doc.data() as Map<String, dynamic>,
-                    },
+        final primaryContacts =
+            allContacts
+                .where((contact) => contact['isFavorite'] == true)
+                .toList();
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Emergency Contacts'),
+            actions: allContacts.isNotEmpty ? [_buildAddContactButton()] : [],
+          ),
+          body:
+              allContacts.isEmpty
+                  ? const Center(child: Text('No emergency contacts yet.'))
+                  : ListView(
+                    padding: const EdgeInsets.all(12),
+                    children: [
+                      Text(
+                        '${allContacts.length} contacts available',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (primaryContacts.isNotEmpty)
+                        const Text(
+                          'Primary Contacts',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ...primaryContacts.map(_buildContactCard),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'All Contacts',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                      ...allContacts.map(_buildContactCard),
+                    ],
+                  ),
+          floatingActionButton:
+              allContacts.isEmpty
+                  ? FloatingActionButton.extended(
+                    onPressed: _addContactDialog,
+                    icon: const Icon(Icons.person_add),
+                    label: const Text('Add Contact'),
                   )
-                  .toList();
-
-          final primaryContacts =
-              allContacts
-                  .where((contact) => contact['isFavorite'] == true)
-                  .toList();
-
-          final otherContacts =
-              allContacts
-                  .where((contact) => contact['isFavorite'] != true)
-                  .toList();
-
-          return ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              Text(
-                '${allContacts.length} contacts available',
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-              const SizedBox(height: 10),
-              if (primaryContacts.isNotEmpty)
-                const Text(
-                  'Primary Contacts',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-              ...primaryContacts.map(_buildContactCard),
-              const SizedBox(height: 16),
-              if (otherContacts.isNotEmpty)
-                const Text(
-                  'All Contacts',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-              ...otherContacts.map(_buildContactCard),
-            ],
-          );
-        },
-      ),
+                  : null,
+        );
+      },
     );
   }
 }
