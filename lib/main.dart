@@ -62,7 +62,7 @@ class _MainScreenState extends State<MainScreen> {
     HomePage(),
     EmergencyPage(),
     AlertsPage(),
-    ContactsPage(),
+    EmergencyContactsPage(),
     SettingsPage(),
   ];
 
