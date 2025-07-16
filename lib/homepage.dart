@@ -15,6 +15,7 @@ class _HomePageState extends State<HomePage> {
           await FirebaseFirestore.instance
               .collection('gestureAlerts')
               .where('gesture', isEqualTo: gestureType)
+              .limit(1)
               .get();
 
       if (querySnapshot.docs.isNotEmpty) {
@@ -22,11 +23,19 @@ class _HomePageState extends State<HomePage> {
         final name = alert['alertName'] ?? 'Unnamed Alert';
         final category = alert['category'] ?? 'No Category';
 
+        // ✅ Add alert log to 'alerts' collection
+        await FirebaseFirestore.instance.collection('alerts').add({
+          'name': name,
+          'category': category,
+          'time': Timestamp.now(),
+        });
+
+        // ✅ Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check, color: Colors.white), // or Colors.green
+                const Icon(Icons.check, color: Colors.white),
                 const SizedBox(width: 10),
                 Expanded(child: Text('🚨 $name ($category) alert triggered!')),
               ],
@@ -34,9 +43,8 @@ class _HomePageState extends State<HomePage> {
             backgroundColor: Colors.green,
           ),
         );
-
-        // TODO: Learn sending SMS when alert logic is triggered. Ask Questions first
       } else {
+        // ❌ No match found
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('⚠️ No alert set for "$gestureType"'),
@@ -45,6 +53,7 @@ class _HomePageState extends State<HomePage> {
         );
       }
     } catch (e) {
+      // ❌ Error handling
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.black),
       );
@@ -81,7 +90,6 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             const SizedBox(height: 32),
-
             Expanded(
               child: GestureDetector(
                 onTap: () => _triggerGesture("singleTap"),
