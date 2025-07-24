@@ -12,21 +12,12 @@ class _EmergencyPageState extends State<EmergencyPage> {
   final TextEditingController _alertNameController = TextEditingController();
   final TextEditingController _gesturePatternController =
       TextEditingController();
+  int _tapCount = 0;
 
-  Future<void> _saveGestureAlert() async {
-    final alertName = _alertNameController.text.trim();
-    final gesture = _gesturePatternController.text.trim();
-
-    if (alertName.isEmpty || gesture.isEmpty) return;
-
-    await FirebaseFirestore.instance.collection('gestureAlerts').add({
-      'alertName': alertName,
-      'gesture': gesture,
+  void _resetTapCountAfterDelay() {
+    Future.delayed(const Duration(milliseconds: 400), () {
+      _tapCount = 0;
     });
-
-    _alertNameController.clear();
-    _gesturePatternController.clear();
-    Navigator.of(context).pop();
   }
 
   void _showAddGestureDialog() {
@@ -66,21 +57,34 @@ class _EmergencyPageState extends State<EmergencyPage> {
                       DropdownMenuItem(value: 'Panic', child: Text('Panic')),
                       DropdownMenuItem(value: 'Custom', child: Text('Custom')),
                     ],
-                    onChanged:
-                        (value) => setState(() {
-                          selectedCategory = value;
-                        }),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedCategory = value;
+                      });
+                    },
                   ),
                   const SizedBox(height: 16),
                   GestureDetector(
                     onTap: () {
-                      setState(() => detectedGesture = 'singleTap');
+                      _tapCount++;
+                      if (_tapCount == 3) {
+                        setState(() => detectedGesture = 'tripleTap');
+                      } else {
+                        setState(() => detectedGesture = 'singleTap');
+                      }
+                      _resetTapCountAfterDelay();
                     },
                     onDoubleTap: () {
                       setState(() => detectedGesture = 'doubleTap');
                     },
                     onLongPress: () {
                       setState(() => detectedGesture = 'longPress');
+                    },
+                    onHorizontalDragEnd: (_) {
+                      setState(() => detectedGesture = 'horizontalSwipe');
+                    },
+                    onVerticalDragEnd: (_) {
+                      setState(() => detectedGesture = 'verticalSwipe');
                     },
                     child: Container(
                       height: 100,
@@ -249,9 +253,26 @@ class _EmergencyPageState extends State<EmergencyPage> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddGestureDialog,
-        child: const Icon(Icons.add),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(right: 16.0, bottom: 16.0),
+        child: SizedBox(
+          height: 50,
+          child: ElevatedButton.icon(
+            onPressed: _showAddGestureDialog,
+            icon: const Icon(Icons.add),
+            label: const Text('Define Gesture'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF736BFE),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(180, 50), // Width, Height
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              elevation: 6,
+              textStyle: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
       ),
     );
   }

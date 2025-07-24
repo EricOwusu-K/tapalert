@@ -55,7 +55,7 @@ class _EmergencyContactsPageState extends State<EmergencyContactsPage> {
                             });
                           },
                         ),
-                        const Text('Mark as Primary (Favorite)'),
+                        const Text('Add to Favorite'),
                       ],
                     ),
                   ],
