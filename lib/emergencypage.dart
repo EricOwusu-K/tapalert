@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'definegesturepage.dart';
 
 class EmergencyPage extends StatefulWidget {
   const EmergencyPage({super.key});
@@ -9,137 +9,6 @@ class EmergencyPage extends StatefulWidget {
 }
 
 class _EmergencyPageState extends State<EmergencyPage> {
-  final TextEditingController _alertNameController = TextEditingController();
-  final TextEditingController _gesturePatternController =
-      TextEditingController();
-  int _tapCount = 0;
-
-  void _resetTapCountAfterDelay() {
-    Future.delayed(const Duration(milliseconds: 400), () {
-      _tapCount = 0;
-    });
-  }
-
-  void _showAddGestureDialog() {
-    String? selectedCategory;
-    String detectedGesture = '';
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Gesture Alert'),
-          content: StatefulBuilder(
-            builder: (context, setState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: _alertNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Name of Alert',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Select Category',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'Medical',
-                        child: Text('Medical'),
-                      ),
-                      DropdownMenuItem(value: 'Fire', child: Text('Fire')),
-                      DropdownMenuItem(value: 'Police', child: Text('Police')),
-                      DropdownMenuItem(value: 'Panic', child: Text('Panic')),
-                      DropdownMenuItem(value: 'Custom', child: Text('Custom')),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        selectedCategory = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () {
-                      _tapCount++;
-                      if (_tapCount == 3) {
-                        setState(() => detectedGesture = 'tripleTap');
-                      } else {
-                        setState(() => detectedGesture = 'singleTap');
-                      }
-                      _resetTapCountAfterDelay();
-                    },
-                    onDoubleTap: () {
-                      setState(() => detectedGesture = 'doubleTap');
-                    },
-                    onLongPress: () {
-                      setState(() => detectedGesture = 'longPress');
-                    },
-                    onHorizontalDragEnd: (_) {
-                      setState(() => detectedGesture = 'horizontalSwipe');
-                    },
-                    onVerticalDragEnd: (_) {
-                      setState(() => detectedGesture = 'verticalSwipe');
-                    },
-                    child: Container(
-                      height: 100,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey),
-                      ),
-                      child: Center(
-                        child: Text(
-                          detectedGesture.isEmpty
-                              ? 'Tap here to record gesture'
-                              : 'Gesture Recorded: $detectedGesture',
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final alertName = _alertNameController.text.trim();
-                if (alertName.isEmpty ||
-                    detectedGesture.isEmpty ||
-                    selectedCategory == null)
-                  return;
-
-                await FirebaseFirestore.instance
-                    .collection('gestureAlerts')
-                    .add({
-                      'alertName': alertName,
-                      'gesture': detectedGesture,
-                      'category': selectedCategory,
-                    });
-
-                _alertNameController.clear();
-                Navigator.of(context).pop();
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildEmergencyCard(
     String title,
     String description,
@@ -233,7 +102,9 @@ class _EmergencyPageState extends State<EmergencyPage> {
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.call),
                       label: const Text('Call Emergency Services'),
-                      onPressed: () {},
+                      onPressed: () {
+                        // Add phone call functionality
+                      },
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -244,7 +115,9 @@ class _EmergencyPageState extends State<EmergencyPage> {
                         'Share My Location',
                         style: TextStyle(color: Colors.green),
                       ),
-                      onPressed: () {},
+                      onPressed: () {
+                        // Add location sharing logic
+                      },
                     ),
                   ),
                 ],
@@ -258,7 +131,14 @@ class _EmergencyPageState extends State<EmergencyPage> {
         child: SizedBox(
           height: 50,
           child: ElevatedButton.icon(
-            onPressed: _showAddGestureDialog,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const DefineGesturePage(),
+                ),
+              );
+            },
             icon: const Icon(Icons.add),
             label: const Text('Define Gesture'),
             style: ElevatedButton.styleFrom(
