@@ -1,258 +1,224 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class EmergencyContactsPage extends StatefulWidget {
+class EmergencyContactsPage extends StatelessWidget {
   const EmergencyContactsPage({super.key});
 
-  @override
-  State<EmergencyContactsPage> createState() => _EmergencyContactsPageState();
-}
+  void _addContactDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final relationshipController = TextEditingController();
+    final phoneController = TextEditingController();
+    bool isPrimary = false;
 
-class _EmergencyContactsPageState extends State<EmergencyContactsPage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _relationshipController = TextEditingController();
-
-  Future<void> _addContactDialog() async {
-    bool isFavorite = false;
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Emergency Contact'),
-          content: StatefulBuilder(
-            builder: (context, setState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Name'),
-                    ),
-                    TextField(
-                      controller: _phoneController,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone Number',
-                      ),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    TextField(
-                      controller: _relationshipController,
-                      decoration: const InputDecoration(
-                        labelText: 'Relationship',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: isFavorite,
-                          onChanged: (value) {
-                            setState(() {
-                              isFavorite = value!;
-                            });
-                          },
-                        ),
-                        const Text('Add to Favorite'),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.pop(context),
-            ),
-            ElevatedButton(
-              child: const Text('Save'),
-              onPressed: () async {
-                final name = _nameController.text.trim();
-                final phone = _phoneController.text.trim();
-                final relationship = _relationshipController.text.trim();
-
-                if (name.isEmpty || phone.isEmpty || relationship.isEmpty)
-                  return;
-
-                await FirebaseFirestore.instance.collection('contacts').add({
-                  'name': name,
-                  'phone': phone,
-                  'relationship': relationship,
-                  'isFavorite': isFavorite,
-                  'createdAt': Timestamp.now(),
-                });
-
-                _nameController.clear();
-                _phoneController.clear();
-                _relationshipController.clear();
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _confirmDelete(String docId) async {
-    final confirm = await showDialog<bool>(
+    showDialog(
       context: context,
       builder:
-          (_) => AlertDialog(
-            title: const Text('Delete Contact'),
-            content: const Text('Do you want to delete this contact?'),
+          (context) => AlertDialog(
+            title: const Text("Add Emergency Contact"),
+            content: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: "Name"),
+                  ),
+                  TextField(
+                    controller: relationshipController,
+                    decoration: const InputDecoration(
+                      labelText: "Relationship",
+                    ),
+                  ),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: "Phone Number",
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const Text("Mark as Primary"),
+                      StatefulBuilder(
+                        builder:
+                            (context, setState) => Checkbox(
+                              value: isPrimary,
+                              onChanged:
+                                  (val) =>
+                                      setState(() => isPrimary = val ?? false),
+                            ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Discard'),
+                child: const Text("Cancel"),
+                onPressed: () => Navigator.pop(context),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Confirm'),
+                child: const Text("Save"),
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  final relationship = relationshipController.text.trim();
+                  final phone = phoneController.text.trim();
+                  final user = FirebaseAuth.instance.currentUser;
+
+                  if (name.isEmpty ||
+                      relationship.isEmpty ||
+                      phone.isEmpty ||
+                      user == null)
+                    return;
+
+                  Navigator.pop(context);
+
+                  final formattedPhone = phone.replaceAll(RegExp(r'\D'), '');
+
+                  final userSnapshot =
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .where('phone', isEqualTo: formattedPhone)
+                          .limit(1)
+                          .get();
+
+                  final contactData = {
+                    'name': name,
+                    'relationship': relationship,
+                    'phone': phone,
+                    'isPrimary': isPrimary,
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'ownerId': user.uid,
+                  };
+
+                  if (userSnapshot.docs.isNotEmpty) {
+                    final matchedUser = userSnapshot.docs.first;
+                    contactData['uid'] = matchedUser.id;
+                    contactData['token'] = matchedUser['token'] ?? '';
+                  }
+
+                  await FirebaseFirestore.instance
+                      .collection('contacts')
+                      .add(contactData);
+                },
               ),
             ],
           ),
     );
-
-    if (confirm == true) {
-      await FirebaseFirestore.instance
-          .collection('contacts')
-          .doc(docId)
-          .delete();
-    }
   }
 
-  Widget _buildContactCard(Map<String, dynamic> contactData) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.orange,
-          child: Text(
-            contactData['name'][0],
-            style: const TextStyle(color: Colors.white),
-          ),
-        ),
-        title: Text(contactData['name']),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(contactData['phone']),
-            Text(contactData['relationship']),
-          ],
-        ),
-        trailing: Wrap(
-          spacing: 8,
-          children: [
-            if (contactData['isFavorite'] == true)
-              const Icon(Icons.star, color: Colors.blue),
-            IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: () => _confirmDelete(contactData['id']),
+  void _deleteContactDialog(BuildContext context, String contactId) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text("Delete Contact"),
+            content: const Text(
+              "Are you sure you want to delete this contact?",
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddContactButton() {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16.0),
-      child: ElevatedButton.icon(
-        icon: const Icon(Icons.person_add),
-        label: const Text('Add Contact'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF736BFE),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            actions: [
+              TextButton(
+                child: const Text("Cancel"),
+                onPressed: () => Navigator.pop(context),
+              ),
+              TextButton(
+                child: const Text("Delete"),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await FirebaseFirestore.instance
+                      .collection('contacts')
+                      .doc(contactId)
+                      .delete();
+                },
+              ),
+            ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        ),
-        onPressed: _addContactDialog,
-      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream:
-          FirebaseFirestore.instance
-              .collection('contacts')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
-      builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? [];
-        final allContacts =
-            docs
-                .map(
-                  (doc) => {
-                    'id': doc.id,
-                    ...doc.data() as Map<String, dynamic>,
-                  },
-                )
-                .toList();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      return const Center(child: Text("Please log in to manage contacts."));
+    }
 
-        final primaryContacts =
-            allContacts
-                .where((contact) => contact['isFavorite'] == true)
-                .toList();
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Emergency Contacts'),
-            actions: allContacts.isNotEmpty ? [_buildAddContactButton()] : [],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Emergency Contacts"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _addContactDialog(context),
           ),
-          body:
-              allContacts.isEmpty
-                  ? const Center(child: Text('No emergency contacts yet.'))
-                  : ListView(
-                    padding: const EdgeInsets.all(12),
-                    children: [
-                      Text(
-                        '${allContacts.length} contacts available',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      if (primaryContacts.isNotEmpty)
-                        const Text(
-                          'Primary Contacts',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ...primaryContacts.map(_buildContactCard),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'All Contacts',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                      ...allContacts.map(_buildContactCard),
-                    ],
-                  ),
-          floatingActionButton:
-              allContacts.isEmpty
-                  ? FloatingActionButton.extended(
-                    onPressed: _addContactDialog,
-                    icon: const Icon(Icons.person_add),
-                    label: const Text('Add Contact'),
-                  )
-                  : null,
-        );
-      },
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream:
+            FirebaseFirestore.instance
+                .collection('contacts')
+                .where('ownerId', isEqualTo: currentUser.uid)
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text("No emergency contacts added yet."),
+            );
+          }
+
+          final contacts = snapshot.data!.docs;
+          final primaryContacts =
+              contacts.where((doc) => doc['isPrimary'] == true).toList();
+          final otherContacts =
+              contacts.where((doc) => doc['isPrimary'] != true).toList();
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (primaryContacts.isNotEmpty) ...[
+                const Text(
+                  "Primary Contacts",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ...primaryContacts
+                    .map((doc) => _buildContactTile(context, doc))
+                    .toList(),
+                const SizedBox(height: 16),
+              ],
+              const Text(
+                "All Contacts",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ...otherContacts
+                  .map((doc) => _buildContactTile(context, doc))
+                  .toList(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildContactTile(BuildContext context, DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Card(
+      child: ListTile(
+        title: Text(data['name'] ?? ''),
+        subtitle: Text(
+          "${data['relationship'] ?? ''} • ${data['phone'] ?? ''}",
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete),
+          onPressed: () => _deleteContactDialog(context, doc.id),
+        ),
+      ),
     );
   }
 }

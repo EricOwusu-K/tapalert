@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:tapalert/firebase_options.dart';
+import 'package:tapalert/firebasemsg.dart';
 import 'homepage.dart';
 import 'alertpage.dart';
 import 'contactpage.dart';
@@ -10,7 +11,7 @@ import 'settingspage.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await initFirebaseMessaging();
 
   runApp(const TapAlertApp());
 }
@@ -26,9 +27,7 @@ class TapAlertApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.light,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(
-          0xFFF4F5F9,
-        ), // Soft pastel background
+        scaffoldBackgroundColor: const Color(0xFFF4F5F9),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFFF4F5F9),
           elevation: 0,
@@ -39,7 +38,7 @@ class TapAlertApp extends StatelessWidget {
           bodySmall: TextStyle(color: Colors.grey),
         ),
         colorScheme: const ColorScheme.light(
-          primary: Color(0xFF736BFE), // Soft purple
+          primary: Color(0xFF736BFE),
           secondary: Color(0xFFF2F3F8),
         ),
       ),

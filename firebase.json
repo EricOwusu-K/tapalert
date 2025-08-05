@@ -1,1 +1,25 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"tapalert-166b2","appId":"1:37217913542:android:6fa1af1d231ff2904e65c7","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"tapalert-166b2","configurations":{"android":"1:37217913542:android:6fa1af1d231ff2904e65c7","ios":"1:37217913542:ios:a6f8a2db80ed4ca84e65c7","macos":"1:37217913542:ios:a6f8a2db80ed4ca84e65c7","web":"1:37217913542:web:198a3b2d66befb604e65c7","windows":"1:37217913542:web:d9ac7f10bb14a1074e65c7"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tapalert-166b2",
+          "appId": "1:37217913542:android:6fa1af1d231ff2904e65c7",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tapalert-166b2",
+          "configurations": {
+            "android": "1:37217913542:android:6fa1af1d231ff2904e65c7",
+            "ios": "1:37217913542:ios:a6f8a2db80ed4ca84e65c7",
+            "macos": "1:37217913542:ios:a6f8a2db80ed4ca84e65c7",
+            "web": "1:37217913542:web:198a3b2d66befb604e65c7",
+            "windows": "1:37217913542:web:d9ac7f10bb14a1074e65c7"
+          }
+        }
+      }
+    }
+  }
+}

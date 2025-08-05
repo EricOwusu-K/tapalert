@@ -14,7 +14,9 @@ dependencies:
   firebase_core: ^2.30.0
   cloud_firestore: ^4.17.0
   firebase_auth: ^4.17.4
-  intl: ^0.18.1 # ✅ Moved here correctly
+  intl: ^0.18.1
+  firebase_messaging: ^14.6.7 # or latest
+  geolocator: ^11.0.0 # Use the latest version
 
 dev_dependencies:
   flutter_test:

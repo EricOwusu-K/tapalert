@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math';
+import 'package:geolocator/geolocator.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,11 +14,47 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _pointerCount = 0;
   int _tapCount = 0;
-  Offset? _initialFocalPoint;
   Offset? _lastTapPosition;
   DateTime? _lastTapTime;
 
+  Future<String> _getCurrentLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return 'Location not available';
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        return 'Location permission denied';
+      }
+    }
+
+    Position position = await Geolocator.getCurrentPosition();
+    return '${position.latitude}, ${position.longitude}';
+  }
+
+  Future<void> _sendPushNotification(String token, String message) async {
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'to': token,
+      'message': message,
+      'sentAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> _triggerGesture(String gestureType) async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("⚠️ Please log in to send alerts"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     try {
       final querySnapshot =
           await FirebaseFirestore.instance
@@ -29,24 +67,61 @@ class _HomePageState extends State<HomePage> {
         final name = alert['alertName'] ?? 'Unnamed Alert';
         final category = alert['category'] ?? 'Uncategorized';
 
-        final alertDoc = await FirebaseFirestore.instance
-            .collection('alerts')
-            .add({'name': name, 'category': category, 'time': DateTime.now()});
+        await FirebaseFirestore.instance.collection('alerts').add({
+          'name': name,
+          'category': category,
+          'time': DateTime.now(),
+          'uid': user.uid,
+        });
 
-        final writtenAlert = await alertDoc.get();
-        final data = writtenAlert.data();
+        final userDoc =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get();
 
-        if (data != null) {
-          final alertName = data['name'] ?? 'Unknown';
-          final alertCategory = data['category'] ?? 'Unknown';
+        final fullName =
+            "${userDoc['firstName'] ?? 'Unknown'} ${userDoc['surname'] ?? ''}";
+        final time = DateTime.now();
+        final location = await _getCurrentLocation();
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('🚨 $alertName ($alertCategory) alert triggered!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+        final message = '''
+EMERGENCY ALERT FROM: $fullName
+Name: $name
+Category: $category
+Time: $time
+GPS Location: $location
+''';
+
+        final contactsSnap =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('contacts')
+                .get();
+
+        for (final doc in contactsSnap.docs) {
+          final contact = doc.data();
+          final token = contact['token'];
+          final phone = contact['phone'];
+
+          if (token != null && token.toString().isNotEmpty) {
+            await _sendPushNotification(token, message);
+          } else if (phone != null) {
+            await FirebaseFirestore.instance.collection('smsQueue').add({
+              'to': phone,
+              'message': message,
+              'queuedAt': FieldValue.serverTimestamp(),
+            });
+          }
         }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🚨 $name ($category) alert triggered!'),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -119,9 +194,7 @@ class _HomePageState extends State<HomePage> {
         onTapUp: _handleTripleTap,
         onLongPress: () => _triggerGesture("longPress"),
         onPanUpdate: _handlePanUpdate,
-        onSecondaryTap:
-            () =>
-                _triggerGesture("circleDraw"), // Placeholder for shape gesture
+        onSecondaryTap: () => _triggerGesture("circleDraw"),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),

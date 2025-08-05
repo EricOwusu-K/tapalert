@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -7,6 +8,23 @@ class AlertsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final User? currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      // User not logged in
+      return Scaffold(
+        appBar: AppBar(title: const Text('Triggered Alerts')),
+        body: const Center(
+          child: Text(
+            'You must be logged in to view triggered alerts.',
+            style: TextStyle(fontSize: 16, color: Colors.black54),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    // User is logged in, show alert list
     return Scaffold(
       appBar: AppBar(title: const Text('Triggered Alerts')),
       body: StreamBuilder<QuerySnapshot>(
