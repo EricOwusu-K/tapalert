@@ -2,180 +2,387 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class EmergencyContactsPage extends StatelessWidget {
-  const EmergencyContactsPage({super.key});
+class ContactsPage extends StatefulWidget {
+  const ContactsPage({super.key});
 
-  void _addContactDialog(BuildContext context) {
+  @override
+  State<ContactsPage> createState() => _ContactsPageState();
+}
+
+class _ContactsPageState extends State<ContactsPage> {
+  final User? user = FirebaseAuth.instance.currentUser;
+
+  String _formatPhoneNumber(String phone) {
+    String digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('0')) {
+      digits = '233${digits.substring(1)}';
+    }
+    if (!digits.startsWith('+')) {
+      digits = '+$digits';
+    }
+    return digits;
+  }
+
+  Future<void> _addContactDialog() async {
     final nameController = TextEditingController();
-    final relationshipController = TextEditingController();
     final phoneController = TextEditingController();
+    final otherRelationshipController = TextEditingController();
     bool isPrimary = false;
 
-    showDialog(
+    String selectedRelationship = 'Mother';
+
+    await showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text("Add Emergency Contact"),
-            content: SingleChildScrollView(
-              child: Column(
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: "Name"),
-                  ),
-                  TextField(
-                    controller: relationshipController,
-                    decoration: const InputDecoration(
-                      labelText: "Relationship",
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Add Contact'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: "Name"),
                     ),
-                  ),
-                  TextField(
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: "Phone Number",
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      const Text("Mark as Primary"),
-                      StatefulBuilder(
-                        builder:
-                            (context, setState) => Checkbox(
-                              value: isPrimary,
-                              onChanged:
-                                  (val) =>
-                                      setState(() => isPrimary = val ?? false),
-                            ),
+                    TextField(
+                      controller: phoneController,
+                      decoration: const InputDecoration(
+                        labelText: "Phone Number",
                       ),
-                    ],
-                  ),
-                ],
+                      keyboardType: TextInputType.phone,
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedRelationship,
+                      decoration: const InputDecoration(
+                        labelText: "Relationship",
+                      ),
+                      items:
+                          [
+                                'Mother',
+                                'Father',
+                                'Sister',
+                                'Brother',
+                                'Husband',
+                                'Wife',
+                                'Guardian',
+                                'Other',
+                              ]
+                              .map(
+                                (rel) => DropdownMenuItem(
+                                  value: rel,
+                                  child: Text(rel),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedRelationship = value!;
+                        });
+                      },
+                    ),
+                    if (selectedRelationship == 'Other')
+                      TextField(
+                        controller: otherRelationshipController,
+                        decoration: const InputDecoration(
+                          labelText: "Specify relationship",
+                        ),
+                      ),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: isPrimary,
+                          onChanged: (value) {
+                            setState(() {
+                              isPrimary = value ?? false;
+                            });
+                          },
+                        ),
+                        const Text('Primary Contact'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                child: const Text("Cancel"),
-                onPressed: () => Navigator.pop(context),
-              ),
-              TextButton(
-                child: const Text("Save"),
-                onPressed: () async {
-                  final name = nameController.text.trim();
-                  final relationship = relationshipController.text.trim();
-                  final phone = phoneController.text.trim();
-                  final user = FirebaseAuth.instance.currentUser;
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    String name = nameController.text.trim();
+                    String phone = _formatPhoneNumber(
+                      phoneController.text.trim(),
+                    );
+                    String relationship =
+                        selectedRelationship == 'Other'
+                            ? otherRelationshipController.text.trim()
+                            : selectedRelationship;
 
-                  if (name.isEmpty ||
-                      relationship.isEmpty ||
-                      phone.isEmpty ||
-                      user == null)
-                    return;
-
-                  Navigator.pop(context);
-
-                  final formattedPhone = phone.replaceAll(RegExp(r'\D'), '');
-
-                  final userSnapshot =
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .where('phone', isEqualTo: formattedPhone)
-                          .limit(1)
-                          .get();
-
-                  final contactData = {
-                    'name': name,
-                    'relationship': relationship,
-                    'phone': phone,
-                    'isPrimary': isPrimary,
-                    'createdAt': FieldValue.serverTimestamp(),
-                    'ownerId': user.uid,
-                  };
-
-                  if (userSnapshot.docs.isNotEmpty) {
-                    final matchedUser = userSnapshot.docs.first;
-                    contactData['uid'] = matchedUser.id;
-                    contactData['token'] = matchedUser['token'] ?? '';
-                  }
-
-                  await FirebaseFirestore.instance
-                      .collection('contacts')
-                      .add(contactData);
-                },
-              ),
-            ],
-          ),
+                    if (name.isNotEmpty && phone.isNotEmpty && user != null) {
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('contacts')
+                            .add({
+                              'ownerId': user!.uid,
+                              'name': name,
+                              'phone': phone,
+                              'relationship': relationship,
+                              'isPrimary': isPrimary,
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Contact added successfully'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to add contact: $e')),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  void _deleteContactDialog(BuildContext context, String contactId) {
-    showDialog(
+  Future<void> _editContactDialog(DocumentSnapshot doc) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final nameController = TextEditingController(text: data['name'] ?? '');
+    final phoneController = TextEditingController(
+      text: _formatPhoneNumber(data['phone'] ?? ''),
+    );
+    final otherRelationshipController = TextEditingController();
+    bool isPrimary = data['isPrimary'] ?? false;
+
+    String selectedRelationship = data['relationship'] ?? 'Mother';
+    if (![
+      'Mother',
+      'Father',
+      'Sister',
+      'Brother',
+      'Husband',
+      'Wife',
+      'Guardian',
+      'Other',
+    ].contains(selectedRelationship)) {
+      selectedRelationship = 'Other';
+      otherRelationshipController.text = data['relationship'] ?? '';
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Edit Contact'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'Name'),
+                    ),
+                    TextField(
+                      controller: phoneController,
+                      decoration: const InputDecoration(labelText: 'Phone'),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedRelationship,
+                      decoration: const InputDecoration(
+                        labelText: "Relationship",
+                      ),
+                      items:
+                          [
+                                'Mother',
+                                'Father',
+                                'Sister',
+                                'Brother',
+                                'Husband',
+                                'Wife',
+                                'Guardian',
+                                'Other',
+                              ]
+                              .map(
+                                (rel) => DropdownMenuItem(
+                                  value: rel,
+                                  child: Text(rel),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedRelationship = value!;
+                        });
+                      },
+                    ),
+                    if (selectedRelationship == 'Other')
+                      TextField(
+                        controller: otherRelationshipController,
+                        decoration: const InputDecoration(
+                          labelText: "Specify relationship",
+                        ),
+                      ),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: isPrimary,
+                          onChanged: (value) {
+                            setState(() {
+                              isPrimary = value ?? false;
+                            });
+                          },
+                        ),
+                        const Text('Primary Contact'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    String name = nameController.text.trim();
+                    String phone = _formatPhoneNumber(
+                      phoneController.text.trim(),
+                    );
+                    String relationship =
+                        selectedRelationship == 'Other'
+                            ? otherRelationshipController.text.trim()
+                            : selectedRelationship;
+
+                    if (name.isNotEmpty && phone.isNotEmpty) {
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('contacts')
+                            .doc(doc.id)
+                            .update({
+                              'name': name,
+                              'phone': phone,
+                              'relationship': relationship,
+                              'isPrimary': isPrimary,
+                            });
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Contact updated successfully'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to update contact: $e'),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Update'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteContact(String docId) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text("Delete Contact"),
+            title: const Text('Delete Contact'),
             content: const Text(
-              "Are you sure you want to delete this contact?",
+              'Are you sure you want to delete this contact?',
             ),
             actions: [
               TextButton(
-                child: const Text("Cancel"),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
               ),
               TextButton(
-                child: const Text("Delete"),
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await FirebaseFirestore.instance
-                      .collection('contacts')
-                      .doc(contactId)
-                      .delete();
-                },
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
               ),
             ],
           ),
     );
+
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('contacts')
+            .doc(docId)
+            .delete();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contact deleted successfully')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to delete contact: $e')));
+      }
+    }
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      return const Center(child: Text("Please log in to manage contacts."));
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      return const Scaffold(
+        body: Center(child: Text('Please log in to see your contacts')),
+      );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Emergency Contacts"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _addContactDialog(context),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Contacts')),
       body: StreamBuilder<QuerySnapshot>(
         stream:
             FirebaseFirestore.instance
                 .collection('contacts')
-                .where('ownerId', isEqualTo: currentUser.uid)
+                .where('ownerId', isEqualTo: userId)
+                .orderBy('isPrimary', descending: true)
                 .orderBy('createdAt', descending: true)
                 .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Text("No emergency contacts added yet."),
-            );
+            return const Center(child: Text('No contacts found'));
           }
 
           final contacts = snapshot.data!.docs;
           final primaryContacts =
               contacts.where((doc) => doc['isPrimary'] == true).toList();
-          final otherContacts =
-              contacts.where((doc) => doc['isPrimary'] != true).toList();
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -187,7 +394,7 @@ class EmergencyContactsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 ...primaryContacts
-                    .map((doc) => _buildContactTile(context, doc))
+                    .map((doc) => _buildContactTile(doc))
                     .toList(),
                 const SizedBox(height: 16),
               ],
@@ -196,28 +403,35 @@ class EmergencyContactsPage extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              ...otherContacts
-                  .map((doc) => _buildContactTile(context, doc))
-                  .toList(),
+              ...contacts.map((doc) => _buildContactTile(doc)).toList(),
             ],
           );
         },
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addContactDialog,
+        child: const Icon(Icons.add),
+      ),
     );
   }
 
-  Widget _buildContactTile(BuildContext context, DocumentSnapshot doc) {
+  Widget _buildContactTile(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    return Card(
-      child: ListTile(
-        title: Text(data['name'] ?? ''),
-        subtitle: Text(
-          "${data['relationship'] ?? ''} • ${data['phone'] ?? ''}",
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.delete),
-          onPressed: () => _deleteContactDialog(context, doc.id),
-        ),
+    return ListTile(
+      title: Text("${data['name']} (${data['relationship']})"),
+      subtitle: Text(data['phone']),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () => _editContactDialog(doc),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: () => _deleteContact(doc.id),
+          ),
+        ],
       ),
     );
   }

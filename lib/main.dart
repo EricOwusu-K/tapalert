@@ -11,6 +11,8 @@ import 'settingspage.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   await initFirebaseMessaging();
 
   runApp(const TapAlertApp());
@@ -48,20 +50,28 @@ class TapAlertApp extends StatelessWidget {
 }
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final int initialIndex;
+
+  const MainScreen({super.key, this.initialIndex = 0});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+  }
 
   final List<Widget> _pages = [
     HomePage(),
     EmergencyPage(),
     AlertsPage(),
-    EmergencyContactsPage(),
+    ContactsPage(),
     SettingsPage(),
   ];
 

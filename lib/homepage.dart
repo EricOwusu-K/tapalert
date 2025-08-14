@@ -17,21 +17,27 @@ class _HomePageState extends State<HomePage> {
   Offset? _lastTapPosition;
   DateTime? _lastTapTime;
 
-  Future<String> _getCurrentLocation() async {
+  // Class-level variable to store location
+  Position? position;
+
+  String buildGoogleMapsLink(Position position) {
+    return 'https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}';
+  }
+
+  Future<void> _getCurrentLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return 'Location not available';
+    if (!serviceEnabled) return;
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.deniedForever ||
           permission == LocationPermission.denied) {
-        return 'Location permission denied';
+        return;
       }
     }
 
-    Position position = await Geolocator.getCurrentPosition();
-    return '${position.latitude}, ${position.longitude}';
+    position = await Geolocator.getCurrentPosition();
   }
 
   Future<void> _sendPushNotification(String token, String message) async {
@@ -56,6 +62,29 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
+      // Get user's firstName and surname from Firestore
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+      final firstName = userDoc.data()?['firstName'] ?? '';
+      final surname = userDoc.data()?['surname'] ?? '';
+      final fullname = '$firstName $surname';
+
+      await _getCurrentLocation();
+
+      if (position == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not get location. Alert not sent.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
       final querySnapshot =
           await FirebaseFirestore.instance
               .collection('gestureAlerts')
@@ -64,61 +93,75 @@ class _HomePageState extends State<HomePage> {
 
       if (querySnapshot.docs.isNotEmpty) {
         final alert = querySnapshot.docs.first.data();
-        final name = alert['alertName'] ?? 'Unnamed Alert';
+        final gestureName = alert['alertName'] ?? 'Unnamed Alert';
         final category = alert['category'] ?? 'Uncategorized';
 
+        final googleMapsUrl = buildGoogleMapsLink(position!);
+
         await FirebaseFirestore.instance.collection('alerts').add({
-          'name': name,
+          'name': gestureName,
           'category': category,
           'time': DateTime.now(),
           'uid': user.uid,
+          'map': googleMapsUrl,
         });
 
-        final userDoc =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .get();
-
-        final fullName =
-            "${userDoc['firstName'] ?? 'Unknown'} ${userDoc['surname'] ?? ''}";
         final time = DateTime.now();
-        final location = await _getCurrentLocation();
 
         final message = '''
-EMERGENCY ALERT FROM: $fullName
-Name: $name
+EMERGENCY ALERT FROM: $fullname
+Name: $gestureName
 Category: $category
 Time: $time
-GPS Location: $location
+Map: $googleMapsUrl
 ''';
 
         final contactsSnap =
             await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
                 .collection('contacts')
+                .where('ownerId', isEqualTo: user.uid)
                 .get();
+
+        if (contactsSnap.docs.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("⚠️ No contacts saved. Please add at least one."),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return;
+        }
 
         for (final doc in contactsSnap.docs) {
           final contact = doc.data();
-          final token = contact['token'];
+
           final phone = contact['phone'];
+          final token = contact['token'];
 
           if (token != null && token.toString().isNotEmpty) {
             await _sendPushNotification(token, message);
-          } else if (phone != null) {
-            await FirebaseFirestore.instance.collection('smsQueue').add({
-              'to': phone,
-              'message': message,
-              'queuedAt': FieldValue.serverTimestamp(),
-            });
+
+            if (phone != null && phone.toString().isNotEmpty) {
+              await FirebaseFirestore.instance.collection('smsQueue').add({
+                'to': phone,
+                'message': message,
+                'queuedAt': FieldValue.serverTimestamp(),
+              });
+            }
+          } else {
+            if (phone != null && phone.toString().isNotEmpty) {
+              await FirebaseFirestore.instance.collection('smsQueue').add({
+                'to': phone,
+                'message': message,
+                'queuedAt': FieldValue.serverTimestamp(),
+              });
+            }
           }
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🚨 $name ($category) alert triggered!'),
+            content: Text('🚨 $gestureName ($category) alert triggered!'),
             backgroundColor: Colors.green,
           ),
         );

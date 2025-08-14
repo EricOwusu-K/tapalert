@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:tapalert/auth_service.dart';
-import 'package:tapalert/loginsignuppage.dart';
+import 'package:tapalert/firebase_auth.dart';
+import 'package:tapalert/login_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:tapalert/userprofilepage.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -14,12 +15,35 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool isSharingLocation = false;
   bool isReceivingAlerts = false;
+  bool isAutoSendAlerts = false;
+  bool isSharingGPS = false;
+
   User? user;
+  String? fullName;
+  String? phoneNumber;
 
   @override
   void initState() {
     super.initState();
     user = AuthService().getCurrentUser();
+    if (user != null) {
+      _loadUserDetails();
+    }
+  }
+
+  Future<void> _loadUserDetails() async {
+    final doc =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user!.uid)
+            .get();
+    if (doc.exists) {
+      final data = doc.data()!;
+      setState(() {
+        fullName = "${data['firstName']} ${data['surname']}";
+        phoneNumber = data['phone'];
+      });
+    }
   }
 
   void _refreshUser() {
@@ -57,7 +81,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _navigateToLogin() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const LoginSignUpPage()),
+      MaterialPageRoute(builder: (_) => const LoginPage()),
     ).then((_) => _refreshUser());
   }
 
@@ -70,12 +94,41 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Widget _buildProfileSection() {
-    return GestureDetector(
-      onTap: user != null ? _viewProfile : null,
+  Widget _buildProfileCard() {
+    String initials = "";
+    if (fullName != null && fullName!.isNotEmpty) {
+      final names = fullName!.split(" ");
+      if (names.length >= 2) {
+        initials = names[0][0] + names[1][0];
+      } else if (names.isNotEmpty) {
+        initials = names[0][0];
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
+      ),
       child: Row(
         children: [
-          const CircleAvatar(radius: 30, child: Icon(Icons.person)),
+          CircleAvatar(
+            radius: 30,
+            backgroundColor: user != null ? Colors.blue : Colors.grey.shade300,
+            child:
+                user != null
+                    ? Text(
+                      initials.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                    : const Icon(Icons.person, color: Colors.black54, size: 30),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child:
@@ -84,13 +137,20 @@ class _SettingsPageState extends State<SettingsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          user!.email ?? "No email",
+                          fullName ?? "TapAlert User",
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Text(user!.uid, style: const TextStyle(fontSize: 12)),
+                        Text(
+                          phoneNumber ?? "",
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                        Text(
+                          user!.email ?? "",
+                          style: const TextStyle(color: Colors.black54),
+                        ),
                       ],
                     )
                     : const Text(
@@ -102,113 +162,132 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
           ),
           if (user != null)
-            IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: _viewProfile,
+              tooltip: "View Profile",
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildToggle({
-    required String label,
-    required bool value,
-    required void Function(bool) onChanged,
-  }) {
-    return ListTile(
-      title: Text(label),
-      trailing: Switch(
-        value: value,
-        onChanged: user != null ? onChanged : null,
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
       ),
+    );
+  }
+
+  Widget _buildToggleTile(
+    IconData icon,
+    String title,
+    String subtitle,
+    bool value,
+    Function(bool) onChanged,
+  ) {
+    return SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      secondary: Icon(icon, color: Colors.blue),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+      subtitle: Text(subtitle),
+      value: value,
+      onChanged: user != null ? onChanged : null,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Settings")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      backgroundColor: const Color(0xFFF0F2FF),
+      appBar: AppBar(
+        title: const Text(
+          "Settings",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildProfileSection(),
+            const Text(
+              "Customize your TapAlert experience",
+              style: TextStyle(fontSize: 14, color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+            _buildProfileCard(),
             if (user == null)
-              TextButton(
-                onPressed: _navigateToLogin,
-                child: const Text("Log in to manage your settings"),
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: TextButton(
+                  onPressed: _navigateToLogin,
+                  child: const Text("Log in to manage your settings"),
+                ),
               ),
             const SizedBox(height: 20),
-            _buildToggle(
-              label: "Share location with contacts",
-              value: isSharingLocation,
-              onChanged: (val) => setState(() => isSharingLocation = val),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black12, blurRadius: 8),
+                ],
+              ),
+              child: Column(
+                children: [
+                  _buildSectionTitle("Emergency Settings"),
+                  _buildToggleTile(
+                    Icons.phone,
+                    "Auto Send Alerts",
+                    "Automatically send to emergency services",
+                    isAutoSendAlerts,
+                    (val) => setState(() => isAutoSendAlerts = val),
+                  ),
+                  _buildToggleTile(
+                    Icons.location_on,
+                    "Share Location",
+                    "Include GPS location in alerts",
+                    isSharingGPS,
+                    (val) => setState(() => isSharingGPS = val),
+                  ),
+                  _buildToggleTile(
+                    Icons.group,
+                    "Share location with contacts",
+                    "Your location will be shared with trusted contacts",
+                    isSharingLocation,
+                    (val) => setState(() => isSharingLocation = val),
+                  ),
+                  _buildToggleTile(
+                    Icons.notifications_active,
+                    "Receive alerts from others",
+                    "Get notified when others send alerts",
+                    isReceivingAlerts,
+                    (val) => setState(() => isReceivingAlerts = val),
+                  ),
+                ],
+              ),
             ),
-            _buildToggle(
-              label: "Receive alerts from others",
-              value: isReceivingAlerts,
-              onChanged: (val) => setState(() => isReceivingAlerts = val),
-            ),
+            if (user != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 24),
+                child: ElevatedButton.icon(
+                  onPressed: _logout,
+                  icon: const Icon(Icons.logout),
+                  label: const Text("Log out"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                  ),
+                ),
+              ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class UserProfilePage extends StatelessWidget {
-  final String userId;
-
-  const UserProfilePage({super.key, required this.userId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("My Profile")),
-      body: FutureBuilder<DocumentSnapshot>(
-        future:
-            FirebaseFirestore.instance.collection('users').doc(userId).get(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("User details not found."));
-          }
-
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-
-          return Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Name",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text("${data['firstName']} ${data['surname']}"),
-                const SizedBox(height: 16),
-                const Text(
-                  "Phone",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(data['phone'] ?? "N/A"),
-                const SizedBox(height: 16),
-                const Text(
-                  "Email",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(data['email'] ?? "N/A"),
-                const SizedBox(height: 16),
-                const Text(
-                  "UID",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(data['uid'] ?? "N/A"),
-              ],
-            ),
-          );
-        },
       ),
     );
   }

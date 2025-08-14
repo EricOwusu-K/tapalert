@@ -13,7 +13,7 @@ class AlertsPage extends StatelessWidget {
     if (currentUser == null) {
       // User not logged in
       return Scaffold(
-        appBar: AppBar(title: const Text('Triggered Alerts')),
+        appBar: AppBar(title: const Text('Alerts History')),
         body: const Center(
           child: Text(
             'You must be logged in to view triggered alerts.',
@@ -26,7 +26,15 @@ class AlertsPage extends StatelessWidget {
 
     // User is logged in, show alert list
     return Scaffold(
-      appBar: AppBar(title: const Text('Triggered Alerts')),
+      appBar: AppBar(
+        title: const Text('Alerts History'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {}, // Keep your existing refresh logic if any
+          ),
+        ],
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream:
             FirebaseFirestore.instance
@@ -49,7 +57,8 @@ class AlertsPage extends StatelessWidget {
             itemCount: alerts.length,
             itemBuilder: (context, index) {
               final alert = alerts[index].data() as Map<String, dynamic>;
-              final name = alert['name'] ?? 'Unknown Alert';
+              final name =
+                  alert['name'] ?? alert['category'] ?? 'Unknown Alert';
               final category = alert['category'] ?? 'Uncategorized';
               final timestamp = alert['time'] as Timestamp?;
               final formattedTime =

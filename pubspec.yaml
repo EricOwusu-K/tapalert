@@ -17,6 +17,9 @@ dependencies:
   intl: ^0.18.1
   firebase_messaging: ^14.6.7 # or latest
   geolocator: ^11.0.0 # Use the latest version
+  flutter_svg: ^2.2.0
+  geocoding: ^2.0.4
+  http: ^1.4.0
 
 dev_dependencies:
   flutter_test:

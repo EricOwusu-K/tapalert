@@ -1,3 +1,4 @@
+// <same imports as before>
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -26,8 +27,8 @@ class _EmergencyPageState extends State<EmergencyPage> {
       return;
     }
 
-    // Step 1: Get user location
     Position? position;
+
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -59,71 +60,105 @@ class _EmergencyPageState extends State<EmergencyPage> {
       return;
     }
 
-    // Step 2: Save alert to Firestore
+    // <<--- IMPORTANT FIX: build googleMapsUrl here (position is available) --->
+    final googleMapsUrl =
+        position != null
+            ? 'https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}'
+            : '';
+
+    // add the alert doc (now googleMapsUrl is defined)
     try {
       await FirebaseFirestore.instance.collection('alerts').add({
-        'userId': user.uid,
         'category': category,
-        'timestamp': Timestamp.now(),
-        'location': {
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        },
+        'time': DateTime.now(),
+        'uid': user.uid,
+        'map': googleMapsUrl,
       });
     } catch (e) {
       print("Firestore error: $e");
     }
 
-    // Step 3: Send push notification to each emergency contact
     try {
       final userDoc =
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .get();
-      final contactSnapshots =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('contacts')
-              .get();
 
       String firstName = userDoc.data()?['firstName'] ?? 'Unknown';
       String surname = userDoc.data()?['surname'] ?? '';
       String fullName = '$firstName $surname';
       String time = DateTime.now().toString();
-      String location = 'Lat ${position.latitude}, Long ${position.longitude}';
 
-      for (var doc in contactSnapshots.docs) {
-        final token = doc['token'];
-        if (token != null && token is String && token.isNotEmpty) {
-          await _sendPushNotification(
-            token: token,
-            title: "🚨 EMERGENCY ALERT FROM: $fullName",
-            body: '''
-Name: $firstName
+      final contactsSnap =
+          await FirebaseFirestore.instance
+              .collection('contacts')
+              .where('ownerId', isEqualTo: user.uid)
+              .get();
+
+      if (contactsSnap.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ No contacts saved. Please add at least one.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      for (final doc in contactsSnap.docs) {
+        final contact = doc.data();
+
+        final phone = contact['phone'];
+        final token = contact['token'];
+
+        // Use the googleMapsUrl defined earlier
+        // (no need to recreate it inside the loop)
+        final message = '''
+EMERGENCY ALERT FROM: $fullName
 Category: $category
 Time: $time
-GPS Location: $location
-''',
-          );
+Map: $googleMapsUrl
+''';
+
+        if (token != null && token.toString().isNotEmpty) {
+          await _sendPushNotification(token, "🚨 EMERGENCY ALERT", message);
+
+          if (phone != null && phone.toString().isNotEmpty) {
+            await FirebaseFirestore.instance.collection('smsQueue').add({
+              'to': phone,
+              'message': message,
+              'queuedAt': FieldValue.serverTimestamp(),
+            });
+          }
+        } else {
+          if (phone != null && phone.toString().isNotEmpty) {
+            await FirebaseFirestore.instance.collection('smsQueue').add({
+              'to': phone,
+              'message': message,
+              'queuedAt': FieldValue.serverTimestamp(),
+            });
+          }
         }
       }
-    } catch (e) {
-      print("Push notification error: $e");
-    }
 
-    // Feedback to user
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$category alert sent successfully!')),
-    );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$category alert sent successfully!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to send alert: $e')));
+    }
   }
 
-  Future<void> _sendPushNotification({
-    required String token,
-    required String title,
-    required String body,
-  }) async {
+  Future<void> _sendPushNotification(
+    String token,
+    String title,
+    String body,
+  ) async {
     try {
       await FirebaseFirestore.instance.collection('notifications').add({
         'to': token,
