@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math';
 import 'package:geolocator/geolocator.dart';
+import 'package:tapalert/notification_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,7 +18,6 @@ class _HomePageState extends State<HomePage> {
   Offset? _lastTapPosition;
   DateTime? _lastTapTime;
 
-  // Class-level variable to store location
   Position? position;
 
   String buildGoogleMapsLink(Position position) {
@@ -40,14 +40,6 @@ class _HomePageState extends State<HomePage> {
     position = await Geolocator.getCurrentPosition();
   }
 
-  Future<void> _sendPushNotification(String token, String message) async {
-    await FirebaseFirestore.instance.collection('notifications').add({
-      'to': token,
-      'message': message,
-      'sentAt': FieldValue.serverTimestamp(),
-    });
-  }
-
   Future<void> _triggerGesture(String gestureType) async {
     final user = FirebaseAuth.instance.currentUser;
 
@@ -62,7 +54,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
-      // Get user's firstName and surname from Firestore
       final userDoc =
           await FirebaseFirestore.instance
               .collection('users')
@@ -97,24 +88,15 @@ class _HomePageState extends State<HomePage> {
         final category = alert['category'] ?? 'Uncategorized';
 
         final googleMapsUrl = buildGoogleMapsLink(position!);
+        final now = DateTime.now();
 
         await FirebaseFirestore.instance.collection('alerts').add({
           'name': gestureName,
           'category': category,
-          'time': DateTime.now(),
+          'time': now,
           'uid': user.uid,
           'map': googleMapsUrl,
         });
-
-        final time = DateTime.now();
-
-        final message = '''
-EMERGENCY ALERT FROM: $fullname
-Name: $gestureName
-Category: $category
-Time: $time
-Map: $googleMapsUrl
-''';
 
         final contactsSnap =
             await FirebaseFirestore.instance
@@ -134,28 +116,33 @@ Map: $googleMapsUrl
 
         for (final doc in contactsSnap.docs) {
           final contact = doc.data();
-
           final phone = contact['phone'];
           final token = contact['token'];
 
-          if (token != null && token.toString().isNotEmpty) {
-            await _sendPushNotification(token, message);
+          if (phone != null && phone.toString().isNotEmpty) {
+            await sendNotification(
+              fullname: fullname,
+              gestureName: gestureName,
+              category: category,
+              time: now.toString(),
+              googleMapsUrl: googleMapsUrl,
+              to: phone,
+              recipientId: contact['uid'],
+              type: 'sms',
+            );
+          }
 
-            if (phone != null && phone.toString().isNotEmpty) {
-              await FirebaseFirestore.instance.collection('smsQueue').add({
-                'to': phone,
-                'message': message,
-                'queuedAt': FieldValue.serverTimestamp(),
-              });
-            }
-          } else {
-            if (phone != null && phone.toString().isNotEmpty) {
-              await FirebaseFirestore.instance.collection('smsQueue').add({
-                'to': phone,
-                'message': message,
-                'queuedAt': FieldValue.serverTimestamp(),
-              });
-            }
+          if (token != null && token.toString().isNotEmpty) {
+            await sendNotification(
+              fullname: fullname,
+              gestureName: gestureName,
+              category: category,
+              time: now.toString(),
+              googleMapsUrl: googleMapsUrl,
+              to: token,
+              recipientId: contact['uid'],
+              type: 'push',
+            );
           }
         }
 
@@ -180,12 +167,32 @@ Map: $googleMapsUrl
     }
   }
 
+  // Gestures
+  Offset? _panStart;
+  Offset? _panEnd;
+
+  void _handlePanStart(DragStartDetails details) {
+    _panStart = details.localPosition;
+  }
+
   void _handlePanUpdate(DragUpdateDetails details) {
-    if (details.delta.dx.abs() > details.delta.dy.abs()) {
+    _panEnd = details.localPosition;
+  }
+
+  void _handlePanEnd(DragEndDetails details) {
+    if (_panStart == null || _panEnd == null) return;
+
+    final dx = _panEnd!.dx - _panStart!.dx;
+    final dy = _panEnd!.dy - _panStart!.dy;
+
+    if (dx.abs() > dy.abs()) {
       _triggerGesture("horizontalSwipe");
     } else {
       _triggerGesture("verticalSwipe");
     }
+
+    _panStart = null;
+    _panEnd = null;
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -236,7 +243,9 @@ Map: $googleMapsUrl
         onDoubleTap: () => _triggerGesture("doubleTap"),
         onTapUp: _handleTripleTap,
         onLongPress: () => _triggerGesture("longPress"),
+        onPanStart: _handlePanStart,
         onPanUpdate: _handlePanUpdate,
+        onPanEnd: _handlePanEnd,
         onSecondaryTap: () => _triggerGesture("circleDraw"),
         child: SafeArea(
           child: Padding(

@@ -12,23 +12,11 @@ class ContactsPage extends StatefulWidget {
 class _ContactsPageState extends State<ContactsPage> {
   final User? user = FirebaseAuth.instance.currentUser;
 
-  String _formatPhoneNumber(String phone) {
-    String digits = phone.replaceAll(RegExp(r'\D'), '');
-    if (digits.startsWith('0')) {
-      digits = '233${digits.substring(1)}';
-    }
-    if (!digits.startsWith('+')) {
-      digits = '+$digits';
-    }
-    return digits;
-  }
-
   Future<void> _addContactDialog() async {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
     final otherRelationshipController = TextEditingController();
     bool isPrimary = false;
-
     String selectedRelationship = 'Mother';
 
     await showDialog(
@@ -113,9 +101,7 @@ class _ContactsPageState extends State<ContactsPage> {
                 TextButton(
                   onPressed: () async {
                     String name = nameController.text.trim();
-                    String phone = _formatPhoneNumber(
-                      phoneController.text.trim(),
-                    );
+                    String phone = phoneController.text.trim();
                     String relationship =
                         selectedRelationship == 'Other'
                             ? otherRelationshipController.text.trim()
@@ -123,6 +109,24 @@ class _ContactsPageState extends State<ContactsPage> {
 
                     if (name.isNotEmpty && phone.isNotEmpty && user != null) {
                       try {
+                        QuerySnapshot userQuery =
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .where('phone', isEqualTo: phone)
+                                .limit(1)
+                                .get();
+
+                        String? token;
+                        String? contactUid;
+
+                        if (userQuery.docs.isNotEmpty) {
+                          final matchedUser = userQuery.docs.first;
+                          final userData =
+                              matchedUser.data() as Map<String, dynamic>;
+                          token = userData['token'];
+                          contactUid = matchedUser.id;
+                        }
+
                         await FirebaseFirestore.instance
                             .collection('contacts')
                             .add({
@@ -131,8 +135,11 @@ class _ContactsPageState extends State<ContactsPage> {
                               'phone': phone,
                               'relationship': relationship,
                               'isPrimary': isPrimary,
+                              'token': token,
+                              'uid': contactUid,
                               'createdAt': FieldValue.serverTimestamp(),
                             });
+
                         if (mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -161,9 +168,7 @@ class _ContactsPageState extends State<ContactsPage> {
   Future<void> _editContactDialog(DocumentSnapshot doc) async {
     final data = doc.data() as Map<String, dynamic>;
     final nameController = TextEditingController(text: data['name'] ?? '');
-    final phoneController = TextEditingController(
-      text: _formatPhoneNumber(data['phone'] ?? ''),
-    );
+    final phoneController = TextEditingController(text: data['phone'] ?? '');
     final otherRelationshipController = TextEditingController();
     bool isPrimary = data['isPrimary'] ?? false;
 
@@ -262,9 +267,7 @@ class _ContactsPageState extends State<ContactsPage> {
                 TextButton(
                   onPressed: () async {
                     String name = nameController.text.trim();
-                    String phone = _formatPhoneNumber(
-                      phoneController.text.trim(),
-                    );
+                    String phone = phoneController.text.trim();
                     String relationship =
                         selectedRelationship == 'Other'
                             ? otherRelationshipController.text.trim()
@@ -272,6 +275,24 @@ class _ContactsPageState extends State<ContactsPage> {
 
                     if (name.isNotEmpty && phone.isNotEmpty) {
                       try {
+                        QuerySnapshot userQuery =
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .where('phone', isEqualTo: phone)
+                                .limit(1)
+                                .get();
+
+                        String? token;
+                        String? contactUid;
+
+                        if (userQuery.docs.isNotEmpty) {
+                          final matchedUser = userQuery.docs.first;
+                          final userData =
+                              matchedUser.data() as Map<String, dynamic>;
+                          token = userData['token'];
+                          contactUid = matchedUser.id;
+                        }
+
                         await FirebaseFirestore.instance
                             .collection('contacts')
                             .doc(doc.id)
@@ -280,7 +301,10 @@ class _ContactsPageState extends State<ContactsPage> {
                               'phone': phone,
                               'relationship': relationship,
                               'isPrimary': isPrimary,
+                              'token': token,
+                              'uid': contactUid,
                             });
+
                         if (mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -348,7 +372,6 @@ class _ContactsPageState extends State<ContactsPage> {
   }
 
   @override
-  @override
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) {
@@ -371,11 +394,9 @@ class _ContactsPageState extends State<ContactsPage> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
-
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text('No contacts found'));
           }

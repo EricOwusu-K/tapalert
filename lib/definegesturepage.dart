@@ -43,7 +43,7 @@ class _DefineGesturePageState extends State<DefineGesturePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Gesture saved successfully!')),
     );
-    Navigator.of(context).pop(); // Go back to Emergency Page
+    Navigator.of(context).pop();
   }
 
   @override

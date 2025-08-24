@@ -1,10 +1,9 @@
-// <same imports as before>
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'definegesturepage.dart';
+import 'notification_service.dart';
 
 class EmergencyPage extends StatefulWidget {
   const EmergencyPage({super.key});
@@ -21,7 +20,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Alert not triggered. Please log in first."),
+          content: Text("Alert cannot be triggered. Please log in first."),
         ),
       );
       return;
@@ -54,19 +53,18 @@ class _EmergencyPageState extends State<EmergencyPage> {
       );
     } catch (e) {
       print("Location error: $e");
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Failed to get location')));
       return;
     }
 
-    // <<--- IMPORTANT FIX: build googleMapsUrl here (position is available) --->
     final googleMapsUrl =
         position != null
             ? 'https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}'
             : '';
 
-    // add the alert doc (now googleMapsUrl is defined)
     try {
       await FirebaseFirestore.instance.collection('alerts').add({
         'category': category,
@@ -76,6 +74,11 @@ class _EmergencyPageState extends State<EmergencyPage> {
       });
     } catch (e) {
       print("Firestore error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Firestore error: $e')));
+      }
     }
 
     try {
@@ -97,6 +100,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
               .get();
 
       if (contactsSnap.docs.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('⚠️ No contacts saved. Please add at least one.'),
@@ -108,37 +112,33 @@ class _EmergencyPageState extends State<EmergencyPage> {
 
       for (final doc in contactsSnap.docs) {
         final contact = doc.data();
-
         final phone = contact['phone'];
         final token = contact['token'];
 
-        // Use the googleMapsUrl defined earlier
-        // (no need to recreate it inside the loop)
-        final message = '''
-EMERGENCY ALERT FROM: $fullName
-Category: $category
-Time: $time
-Map: $googleMapsUrl
-''';
-
         if (token != null && token.toString().isNotEmpty) {
-          await _sendPushNotification(token, "🚨 EMERGENCY ALERT", message);
+          await sendNotification(
+            fullname: fullName,
+            gestureName: category,
+            category: category,
+            time: time,
+            googleMapsUrl: googleMapsUrl,
+            to: token,
+            type: "push",
+            recipientId: contact['uid'],
+          );
+        }
 
-          if (phone != null && phone.toString().isNotEmpty) {
-            await FirebaseFirestore.instance.collection('smsQueue').add({
-              'to': phone,
-              'message': message,
-              'queuedAt': FieldValue.serverTimestamp(),
-            });
-          }
-        } else {
-          if (phone != null && phone.toString().isNotEmpty) {
-            await FirebaseFirestore.instance.collection('smsQueue').add({
-              'to': phone,
-              'message': message,
-              'queuedAt': FieldValue.serverTimestamp(),
-            });
-          }
+        if (phone != null && phone.toString().isNotEmpty) {
+          await sendNotification(
+            fullname: fullName,
+            gestureName: category,
+            category: category,
+            time: time,
+            googleMapsUrl: googleMapsUrl,
+            to: phone,
+            type: "sms",
+            recipientId: contact['uid'],
+          );
         }
       }
 
@@ -156,15 +156,26 @@ Map: $googleMapsUrl
 
   Future<void> _sendPushNotification(
     String token,
-    String title,
-    String body,
+    String fullname,
+    String gestureName,
+    String category,
+    String time,
+    String googleMapsUrl,
   ) async {
     try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
       await FirebaseFirestore.instance.collection('notifications').add({
         'to': token,
-        'title': title,
-        'body': body,
-        'sentAt': FieldValue.serverTimestamp(),
+        'recipientId': user.uid,
+        'title': 'EMERGENCY ALERT FROM: $fullname',
+        'body': '''Alert Name: $gestureName
+Alert Type: $category
+Time: $time
+Map: $googleMapsUrl''',
+        'read': false,
+        'timestamp': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       print("Failed to send push notification: $e");
@@ -272,9 +283,7 @@ Map: $googleMapsUrl
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.call),
                       label: const Text('Call Emergency Services'),
-                      onPressed: () {
-                        // Add phone call functionality
-                      },
+                      onPressed: () {},
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -285,9 +294,7 @@ Map: $googleMapsUrl
                         'Share My Location',
                         style: TextStyle(color: Colors.green),
                       ),
-                      onPressed: () {
-                        // Add location sharing logic
-                      },
+                      onPressed: () {},
                     ),
                   ),
                 ],

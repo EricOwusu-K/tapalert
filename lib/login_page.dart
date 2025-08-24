@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:tapalert/firebase_auth.dart';
+import 'package:tapalert/firebase_authentication.dart';
 import 'package:tapalert/main.dart';
 import 'signup_page.dart';
 
@@ -26,7 +26,6 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text.trim(),
       );
 
-      // ✅ Navigate to SettingsPage on successful login
       if (context.mounted) {
         Navigator.pushReplacement(
           context,

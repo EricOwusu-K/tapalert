@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:tapalert/firebase_auth.dart';
+import 'package:tapalert/firebase_authentication.dart';
 import 'package:tapalert/main.dart';
 
 class SignupPage extends StatefulWidget {
@@ -32,7 +32,6 @@ class _SignupPageState extends State<SignupPage> {
         phone: _phoneController.text.trim(),
       );
 
-      // Navigate to SettingsPage after successful registration
       if (!mounted) return;
       Navigator.pushReplacement(
         context,

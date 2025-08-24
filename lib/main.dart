@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:tapalert/firebase_options.dart';
-import 'package:tapalert/firebasemsg.dart';
+import 'package:tapalert/firebase_messaging.dart';
 import 'homepage.dart';
 import 'alertpage.dart';
 import 'contactpage.dart';

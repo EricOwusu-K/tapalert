@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:tapalert/firebase_auth.dart';
+import 'package:tapalert/firebase_authentication.dart';
 import 'package:tapalert/login_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
